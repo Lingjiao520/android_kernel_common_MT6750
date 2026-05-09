@@ -7,48 +7,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: 双文件根治yylloc重复定义
+      - name: 根治yylloc多重定义
         run: |
           sed -i '/YYLTYPE yylloc/d' scripts/dtc/dtc-lexer.l
-          sed -i 's/extern YYLTYPE yylloc;//g' scripts/dtc/dtc-parser.y
+          sed -i '/YYLTYPE yylloc/d' scripts/dtc/dtc-parser.y
+          echo 'EXTRA_CFLAGS += -fcommon' >> scripts/dtc/Makefile
 
-      - name: 屏蔽OpenSSL3警告报错
+      - name: 屏蔽OpenSSL废弃警告报错
         run: sed -i 's/-Werror//g' scripts/Makefile
 
-      - name: 安装依赖
+      - name: 安装环境依赖
         run: |
           sudo apt update
           sudo apt install -y build-essential flex bison libncurses-dev libssl-dev bc device-tree-compiler python3
 
-      - name: GCC4.9
+      - name: ARM64交叉编译器
         run: git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
-      - name: DrvGen权限&Python3
+      - name: DrvGen权限+Python3适配
         run: |
           sudo chmod -R 777 tools/dct
           sed -i 's/python/python3/g' tools/dct/DrvGen.py
 
-      - name: 机型配置
+      - name: 加载P10机型配置
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: APatch全符号
+      - name: 开启APatch Root全符号
         run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
 
-      - name: 编译vmlinuz
+      - name: 编译内核Image.gz-dtb
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
-      - name: 下载内核
+      - name: 打包下载内核
         uses: actions/upload-artifact@v4
         with:
-          name: MT6750-boot
+          name: MT6750-APatch-vmlinuz
           path: |
             arch/arm64/boot/Image.gz-dtb
             vmlinuz
