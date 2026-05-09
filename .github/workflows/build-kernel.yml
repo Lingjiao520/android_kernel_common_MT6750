@@ -1,4 +1,4 @@
-name: MT6750 k63v2 APatch Auto Release
+name: MT6750 k63v2 APatch
 on:
   workflow_dispatch
 
@@ -13,46 +13,45 @@ jobs:
           sudo apt update
           sed -i 's/YYLTYPE yylloc;//g' scripts/dtc/dtc-lexer.l
 
-      - name: 安装全套依赖
+      - name: 安装依赖
         run: |
           sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop device-tree-compiler python3 python3-pip
 
-      - name: 下载ARM64 GCC4.9
+      - name: GCC4.9
         run: git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
-      - name: 修复MTK DrvGen权限&Python3
+      - name: DrvGen权限修复
         run: |
           chmod -R 755 ./tools/dct/
-          sed -i 's/#!/usr/bin/python/#!/usr/bin/python3/g' ./tools/dct/DrvGen.py
+          sed -i 's/#!/usr/bin/python/#!/usr/bin/python3/g' ./tools/dtc/DrvGen.py
 
-      - name: 加载k63v2机型配置
+      - name: 加载k63v2配置
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: 开启APatch必备全内核符号
+      - name: APatch全符号
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           sed -i 's/# CONFIG_KALLSYMS_ALL is/CONFIG_KALLSYMS_ALL=y/' .config
           make olddefconfig
 
-      - name: 编译内核 Image.gz-dtb
+      - name: 编译内核
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
+          
+          cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
-      - name: 重命名为vmlinuz
-        run: cp arch/arm64/boot/Image.gz-dtb vmlinuz
-
-      - name: 上传发布到Release
-        uses: softprops/action-gh-release@v2
+      - name: 上传下载包
+        uses: actions/upload-artifact@v4
         with:
-          files: |
-            vmlinuz
+          name: MT6750-vmlinuz内核
+          path: |
             arch/arm64/boot/Image.gz-dtb
-        token: ${{ secrets.GITHUB_TOKEN }}
+            vmlinuz
 
