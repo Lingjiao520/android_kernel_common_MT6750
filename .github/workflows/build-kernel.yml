@@ -1,0 +1,48 @@
+name: MT6750 APatch Kernel
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop device-tree-compiler python3
+
+      - name: MTK GCC 4.9
+        run: |
+          git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
+          export ARCH=arm64
+          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
+
+      - name: Load Default Config
+        run: |
+          export ARCH=MT6750
+          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
+          make mrproper
+          make mt6750_defconfig
+
+      - name: Enable APatch KALLSYMS_ALL
+        run: |
+          export ARCH=arm64
+          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
+          sed -i 's/# CONFIG_KALLSYMS_ALL is not set/CONFIG_KALLSYMS_ALL=y/' .config
+          sed -i 's/CONFIG_KALLSYMS=n/CONFIG_KALLSYMS=y/' .config
+          make olddefconfig
+
+      - name: Build Image.gz-dtb
+        run: |
+          export ARCH=arm64
+          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
+          make -j$(nproc) Image.gz-dtb
+
+      - name: Upload Kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: MT6750-APatch
+          path: arch/arm64/boot/Image.gz-dtb
+
