@@ -22,7 +22,7 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
-          make mt6761_defconfig
+          make mt6763_defconfig
 
       - name: Enable APatch KALLSYMS_ALL
         run: |
