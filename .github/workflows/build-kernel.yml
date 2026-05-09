@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Fix DTC Dep
         run: |
           sudo apt update
           sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop device-tree-compiler python3
@@ -16,17 +16,15 @@ jobs:
       - name: MTK GCC 4.9
         run: |
           git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
-          export ARCH=arm64
-          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
 
-      - name: Load Default Config
+      - name: Load Defconfig
         run: |
-          export ARCH=MT6750
+          export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
           make mt6750_defconfig
 
-      - name: Enable APatch KALLSYMS_ALL
+      - name: APatch Kallsyms All
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
@@ -34,13 +32,13 @@ jobs:
           sed -i 's/CONFIG_KALLSYMS=n/CONFIG_KALLSYMS=y/' .config
           make olddefconfig
 
-      - name: Build Image.gz-dtb
+      - name: Build Kernel
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
 
-      - name: Upload Kernel
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: MT6750-APatch
