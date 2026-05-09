@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fix DTC Dep
+      - name: Install Deps
         run: |
           sudo apt update
           sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop device-tree-compiler python3
@@ -22,9 +22,9 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
-          make mt6750_defconfig
+          make mt6761_defconfig
 
-      - name: APatch Kallsyms All
+      - name: Enable APatch KALLSYMS_ALL
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
@@ -32,13 +32,13 @@ jobs:
           sed -i 's/CONFIG_KALLSYMS=n/CONFIG_KALLSYMS=y/' .config
           make olddefconfig
 
-      - name: Build Kernel
+      - name: Build Image.gz-dtb
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
 
-      - name: Upload
+      - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
           name: MT6750-APatch
