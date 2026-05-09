@@ -10,6 +10,9 @@ jobs:
       - name: 修复DTC重复变量
         run: sed -i '/YYLTYPE yylloc/d' scripts/dtc/dtc-lexer.l
 
+      - name: 屏蔽OpenSSL3废弃函数报错
+        run: sed -i 's/-Werror//g' scripts/Makefile
+
       - name: 安装依赖
         run: |
           sudo apt update
@@ -18,32 +21,32 @@ jobs:
       - name: GCC4.9
         run: git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
-      - name: DrvGen权限修复
+      - name: DrvGen权限&Python3修复
         run: |
           sudo chmod -R 777 tools/dct
-          sudo sed -i s/python/python3/g tools/dct/DrvGen.py
+          sed -i 's/python/python3/g' tools/dct/DrvGen.py
 
-      - name: 编译配置
+      - name: 加载机型配置
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: 开启APatch Root符号
+      - name: 开启APatch全符号
         run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
 
-      - name: 打包内核
+      - name: 编译内核
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
-      - name: 下载内核
+      - name: 下载内核包
         uses: actions/upload-artifact@v4
         with:
-          name: MT6750-boot
+          name: MT6750-boot-vmlinuz
           path: |
             arch/arm64/boot/Image.gz-dtb
             vmlinuz
