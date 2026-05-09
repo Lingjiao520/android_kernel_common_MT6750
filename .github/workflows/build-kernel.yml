@@ -1,76 +1,49 @@
 name: MT6750 k63v2 APatch
-on:
-  workflow_dispatch
+on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: 修复DTC yylloc冲突
-        run: |
-          sudo apt update
-          sed -i '\#YYLTYPE yylloc;#d' scripts/dtc/dtc-lexer.l
+      - name: 修复DTC重复变量
+        run: sed -i '/YYLTYPE yylloc/d' scripts/dtc/dtc-lexer.l
 
       - name: 安装依赖
         run: |
-          sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop device-tree-compiler python3 python3-pip
+          sudo apt update
+          sudo apt install -y build-essential flex bison libncurses-dev libssl-dev bc device-tree-compiler python3
 
       - name: GCC4.9
         run: git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
-      - name: DrvGen权限+Python3修复
+      - name: DrvGen权限修复
         run: |
-          chmod 777 -R ./tools/dct/
-          sed -i 's#/usr/bin/python#/usr/bin/python3#g' ./tools/dct/DrvGen.py
+          sudo chmod -R 777 tools/dct
+          sudo sed -i s/python/python3/g tools/dct/DrvGen.py
 
-      - name: 加载机型配置
+      - name: 编译配置
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: APatch全内核符号
-        run: |
-          export ARCH=arm64
-          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
-          sed -i 's#CONFIG_KALLSYMS=n#CONFIG_KALLSYMS=y#g' .config
-          sed -i 's/# CONFIG_KALLSYMS_ALL is/CONFIG_KALLSYMS_ALL=y/g' .config
-          make olddefconfig
+      - name: 开启APatch Root符号
+        run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
 
-      - name: 编译内核
+      - name: 打包内核
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
-      - name: 上传下载
+      - name: 下载内核
         uses: actions/upload-artifact@v4
         with:
-          name: MT6750-vmlinuz
-          path: |
-            arch/arm64/boot/Image.gz-dtb
-            vmlinuz
-          export ARCH=arm64
-          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
-          sed -i 's/# CONFIG_KALLSYMS_ALL is/CONFIG_KALLSYMS_ALL=y/' .config
-          make olddefconfig
-
-      - name: 编译内核
-        run: |
-          export ARCH=arm64
-          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
-          make -j$(nproc) Image.gz-dtb
-          
-          cp arch/arm64/boot/Image.gz-dtb vmlinuz
-
-      - name: 上传下载包
-        uses: actions/upload-artifact@v4
-        with:
-          name: MT6750-vmlinuz内核
+          name: MT6750-boot
           path: |
             arch/arm64/boot/Image.gz-dtb
             vmlinuz
