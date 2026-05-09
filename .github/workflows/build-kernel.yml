@@ -1,4 +1,4 @@
-name: MT6763 APatch Kernel
+name: MT6750 APatch Kernel
 on:
   workflow_dispatch:
 
@@ -8,41 +8,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fix DTC
+      - name: Install Dependencies
         run: |
           sudo apt update
           sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop device-tree-compiler python3
 
-      - name: GCC 4.9
+      - name: MTK GCC 4.9
         run: |
           git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
-      - name: 列出所有可用配置
-        run: ls arch/arm64/configs/
-
-      - name: Load Config
+      - name: Load k63v2 Config
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
-          make mtk_defconfig
+          make k63v2_64_bsp_defconfig
 
       - name: APatch KALLSYMS_ALL
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           sed -i 's/# CONFIG_KALLSYMS_ALL is not set/CONFIG_KALLSYMS_ALL=y/' .config
+          sed -i 's/CONFIG_KALLSYMS=n/CONFIG_KALLSYMS=y/' .config
           make olddefconfig
 
-      - name: Build
+      - name: Build Image.gz-dtb
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
 
-      - name: Upload
+      - name: Upload Kernel
         uses: actions/upload-artifact@v4
         with:
-          name: Kernel
+          name: MT6750-APatch
           path: arch/arm64/boot/Image.gz-dtb
 
