@@ -1,6 +1,6 @@
-name: MT6750 APatch Kernel
+name: MT6750 k63v2 APatch Fix All
 on:
-  workflow_dispatch:
+  workflow_dispatch
 
 jobs:
   build:
@@ -8,40 +8,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: 修复DTC版本冲突 必加
         run: |
           sudo apt update
-          sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop device-tree-compiler python3 python3-pip
+          sudo apt remove -y device-tree-compiler
+          sudo apt install -y dtc
 
-      - name: MTK GCC 4.9
+      - name: 基础依赖
         run: |
-          git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
+          sudo apt install -y git build-essential flex bison libncurses-dev libssl-dev bc lzop python3 python3-pip
 
-      - name: Fix DrvGen 权限 + 加载配置
+      - name: GCC4.9
+        run: git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
+
+      - name: 修复DrvGen权限&python2转3
+        run: |
+          chmod -R 755 ./tools/dct/
+          sed -i 's/#!/usr/bin/python/#!/usr/bin/python3/g' ./tools/dct/DrvGen.py
+
+      - name: 加载机型配置
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
-          chmod 777 ./tools/dct/DrvGen.py
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: APatch KALLSYMS_ALL
+      - name: APatch必备KALLSYMS
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
-          sed -i 's/# CONFIG_KALLSYMS_ALL is not set/CONFIG_KALLSYMS_ALL=y/' .config
-          sed -i 's/CONFIG_KALLSYMS=n/CONFIG_KALLSYMS=y/' .config
+          sed -i 's/# CONFIG_KALLSYMS_ALL is/CONFIG_KALLSYMS_ALL=y/' .config
           make olddefconfig
 
-      - name: Build Image.gz-dtb
+      - name: 编译内核
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
 
-      - name: Upload Kernel
+      - name: 输出内核
         uses: actions/upload-artifact@v4
         with:
-          name: MT6750-APatch
+          name: MT6750_APatch
           path: arch/arm64/boot/Image.gz-dtb
 
