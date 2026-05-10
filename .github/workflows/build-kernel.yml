@@ -1,58 +1,63 @@
-name: MT6750 k63v2 APatch
+name: Build MT6763 Kernel
+
 on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04          # 20.04 仍可直接安装 python2
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout 源码
+        uses: actions/checkout@v4
 
-      # 修复yylloc重复定义DTC报错
-      - name: 修复DTC多重变量冲突
+      # 修复 dtc 工具中 yylloc 重复定义导致的编译错误
+      - name: 修复 DTC 多重变量冲突
         run: |
           sed -i '/YYLTYPE yylloc/d' scripts/dtc/dtc-lexer.l
           sed -i '/YYLTYPE yylloc/d' scripts/dtc/dtc-parser.y
           echo 'EXTRA_CFLAGS += -fcommon' >> scripts/dtc/Makefile
 
-      # 修复OpenSSL3废弃函数报错
-      - name: 屏蔽OpenSSL警告终止编译
-        run: sed -i 's/-Werror//g' scripts/Makefile
-
+      # 安装编译所需依赖，特别安装 python2 避免 DrvGen.py 的 print 语法错误
       - name: 安装依赖
         run: |
           sudo apt update
-          sudo apt install -y build-essential flex bison libncurses-dev libssl-dev bc device-tree-compiler python3
+          sudo apt install -y build-essential flex bison libncurses-dev \
+                              libssl-dev bc device-tree-compiler python2
+          # 将 python 命令指向 python2，内核构建脚本会直接调用 python
+          sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: GCC4.9交叉编译器
-        run: git clone https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
+      # 下载 ARM64 GCC 4.9 交叉编译器（LineageOS）
+      - name: 获取 GCC 4.9 交叉编译器
+        run: git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
-      - name: DrvGen权限+Python3
-        run: |
-          sudo chmod -R 777 tools/dct
-          sed -i 's/python/python3/g' tools/dct/DrvGen.py
+      # 赋予 tools/dct 执行权限（部分仓库权限不足）
+      - name: 修复 DrvGen 权限
+        run: sudo chmod -R 777 tools/dct
 
-      - name: 加载机型配置
+      # 加载 k63v2 64bit 默认配置
+      - name: 加载机型 defconfig
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: APatch Root全符号
+      # 开启全部符号，供 APatch 等 root 方案使用
+      - name: 开启 KALLSYMS_ALL
         run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
 
-      - name: 编译内核vmlinuz
+      # 编译内核生成 Image.gz-dtb
+      - name: 编译内核
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
-      - name: 下载成品内核
+      # 上传产物
+      - name: 上传成品内核
         uses: actions/upload-artifact@v4
         with:
-          name: MT6750-boot
+          name: MT6763-boot
           path: |
             arch/arm64/boot/Image.gz-dtb
             vmlinuz
-
