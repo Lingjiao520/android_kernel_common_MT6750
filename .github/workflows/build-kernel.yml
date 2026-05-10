@@ -72,14 +72,26 @@ jobs:
       - name: 开启 KALLSYMS_ALL
         run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
 
-      - name: 跳过 genheaders 构建（使用预生成 SELinux 头文件）
+      - name: 下载缺失的 SELinux 头文件（避免 genheaders 编译失败）
         run: |
-          # 注释掉 genheaders 编译，避免 classmap.h 缺失
-          sed -i 's/^hostprogs-y.*genheaders/#&/' scripts/selinux/genheaders/Makefile
-          # 确保预生成的头文件存在
-          if [ ! -f security/selinux/include/flask.h ] || [ ! -f security/selinux/include/av_permissions.h ]; then
-            echo "错误：缺少 flask.h 或 av_permissions.h，无法继续"; exit 1
+          mkdir -p security/selinux/include
+          # 如果 flask.h 不存在，从 AOSP 4.9 通用内核镜像下载
+          if [ ! -f security/selinux/include/flask.h ]; then
+            curl -L -o security/selinux/include/flask.h \
+              https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/flask.h
           fi
+          if [ ! -f security/selinux/include/av_permissions.h ]; then
+            curl -L -o security/selinux/include/av_permissions.h \
+              https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/av_permissions.h
+          fi
+          if [ ! -f security/selinux/include/classmap.h ]; then
+            curl -L -o security/selinux/include/classmap.h \
+              https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/classmap.h
+          fi
+          # 确认三个文件现在都存在
+          test -f security/selinux/include/flask.h || exit 1
+          test -f security/selinux/include/av_permissions.h || exit 1
+          test -f security/selinux/include/classmap.h || exit 1
 
       - name: 编译内核
         run: |
