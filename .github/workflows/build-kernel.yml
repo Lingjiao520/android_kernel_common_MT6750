@@ -3,7 +3,6 @@ name: Build MT6763 Kernel (Final)
 on: workflow_dispatch
 
 jobs:
-  # 第一阶段：准备环境
   prepare:
     runs-on: ubuntu-22.04
     steps:
@@ -26,10 +25,9 @@ jobs:
           restore-keys: |
             gcc49-${{ runner.os }}-
 
-      - name: 下载交叉编译器（缓存缺失时）
+      - name: 下载交叉编译器（缓存未命中时）
         if: steps.cache-gcc.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
+        run: git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
       - name: 上传工具链
         uses: actions/upload-artifact@v4
@@ -37,7 +35,6 @@ jobs:
           name: toolchain
           path: gcc/
 
-  # 第二阶段：编译内核
   build:
     needs: prepare
     runs-on: ubuntu-22.04
@@ -79,24 +76,23 @@ jobs:
           done
           ls -l security/selinux/include
 
-      - name: 加载 defconfig（纯主机工具）
+      - name: 加载 defconfig
         run: |
           export ARCH=arm64
+          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: 开启 KALLSYMS_ALL
-        run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
-
-      - name: 构建主机端工具（避免交叉编译器误用）
+      - name: 开启 KALLSYMS_ALL 并禁用不支持的栈保护
         run: |
-          export ARCH=arm64
-          export HOSTCC=gcc-9
-          export HOSTCXX=g++-9
-          make -j$(nproc) scripts
-
+          sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
+          # GCC 4.9 不支持 -fstack-protector-strong，关闭该选项
+          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
+          # 确保 CONFIG_CC_STACKPROTECTOR_NONE 开启（部分内核需要）
+          sed -i 's/# CONFIG_CC_STACKPROTECTOR_NONE is not set/CONFIG_CC_STACKPROTECTOR_NONE=y/' .config
+          
       - name: 编译内核
         run: |
           export ARCH=arm64
