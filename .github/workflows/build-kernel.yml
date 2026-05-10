@@ -97,15 +97,16 @@ jobs:
 
       - name: 编译内核
         run: |
-          # 创建一个临时目录，将 python 指向 python2，优先使用
-          mkdir -p $HOME/python2-bin
-          ln -sf /usr/bin/python2 $HOME/python2-bin/python
-          export PATH="$HOME/python2-bin:$PATH"
+          # 强制将系统 python 永久切换为 python2（当前步骤内）
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 100 || true
+          sudo update-alternatives --set python /usr/bin/python2 || true
           
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
+          export PYTHON=python2
+          
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
