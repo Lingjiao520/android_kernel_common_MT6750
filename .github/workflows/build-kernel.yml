@@ -80,13 +80,15 @@ jobs:
           sed -i 's/-Werror//g' scripts/Makefile.host 2>/dev/null || true
           sed -i 's/-Werror//g' scripts/Makefile 2>/dev/null || true
 
-      - name: 下载缺失的 SELinux 头文件
+      - name: 下载缺失的 SELinux 头文件（android-4.4，带校验）
         run: |
           mkdir -p security/selinux/include
           for f in flask.h av_permissions.h classmap.h; do
             if [ ! -f security/selinux/include/$f ]; then
-              curl -sL -o security/selinux/include/$f \
-                "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/$f"
+              # 使用 -f 确保下载成功，否则删除损坏文件并退出
+              curl -f -sL -o security/selinux/include/$f \
+                "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.4/security/selinux/include/$f" \
+                || { echo "下载 SELinux 头文件失败: $f"; exit 1; }
             fi
           done
 
@@ -112,14 +114,15 @@ jobs:
 
       - name: 补充缺失文件并屏蔽 initramfs 构建
         run: |
-          # 1. 如果 entry.S 不存在，从 android-4.4 分支下载 (与你 4.4.185 内核匹配)
-          if [ ! -f arch/arm64/kernel/entry.S ]; then
-            curl -sL -o arch/arm64/kernel/entry.S \
-              "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.4/arch/arm64/kernel/entry.S"
-          fi
-          # 2. 屏蔽 VDSO 构建目标（如之前）
+          # 强制删除可能已损坏的 entry.S，然后重新下载
+          rm -f arch/arm64/kernel/entry.S
+          # 从 android-4.4 分支下载，使用 -f 确保 HTTP 200
+          curl -f -sL -o arch/arm64/kernel/entry.S \
+            "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.4/arch/arm64/kernel/entry.S" \
+            || { echo "下载 entry.S 失败，请检查网络或更换镜像"; exit 1; }
+          # 屏蔽 VDSO 构建目标
           sed -i 's/^\(.*\)vdso_prepare\(.*\)$/#\1vdso_prepare\2 # disabled/' arch/arm64/Makefile
-          # 3. 彻底阻止 usr/ 目录参与构建 (避免 initramfs_data.o 错误)
+          # 阻止 usr/ 目录参与构建
           echo 'obj- := ' > usr/Makefile
 
       - name: 编译内核
