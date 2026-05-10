@@ -79,7 +79,7 @@ jobs:
           sed -i 's/-Werror//g' scripts/Makefile.host 2>/dev/null || true
           sed -i 's/-Werror//g' scripts/Makefile 2>/dev/null || true
 
-      - name: 下载 SELinux classmap.h（其余头文件由 genheaders 自动生成）
+      - name: 下载缺失的 SELinux classmap.h（仅下载，不生成）
         run: |
           mkdir -p security/selinux/include
           if [ ! -f security/selinux/include/classmap.h ]; then
@@ -111,6 +111,14 @@ jobs:
         run: |
           sed -i 's/^\(.*\)vdso_prepare\(.*\)$/#\1vdso_prepare\2 # disabled/' arch/arm64/Makefile
           echo 'obj- := ' > usr/Makefile
+
+      - name: 修复 entry.o 构建规则（确保 entry.S 能被编译）
+        run: |
+          # 检查 arch/arm64/kernel/Makefile 是否已经包含 entry.o
+          if ! grep -q 'entry\.o' arch/arm64/kernel/Makefile; then
+            # 如果没有，则在 obj-y 变量后面追加 entry.o
+            sed -i '/^obj-y/ s/$/ entry.o/' arch/arm64/kernel/Makefile
+          fi
 
       - name: 编译内核
         run: |
