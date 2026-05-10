@@ -3,7 +3,7 @@ name: Build MT6763 Kernel (2-Stage)
 on: workflow_dispatch
 
 jobs:
-  # ==================== 第一阶段：环境依赖 ====================
+  # ==================== 第一阶段：准备环境 ====================
   prepare:
     runs-on: ubuntu-22.04
     steps:
@@ -17,7 +17,7 @@ jobs:
           sudo apt install -y python2
           sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: 获取 GCC 4.9 交叉编译器（或从缓存恢复）
+      - name: 获取 GCC 4.9 交叉编译器 (缓存)
         uses: actions/cache@v4
         id: cache-gcc
         with:
@@ -26,12 +26,12 @@ jobs:
           restore-keys: |
             gcc49-${{ runner.os }}-
 
-      - name: 如果缓存未命中，则下载编译器
+      - name: 下载交叉编译器 (缓存未命中时)
         if: steps.cache-gcc.outputs.cache-hit != 'true'
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
 
-      - name: 上传工具链供下一阶段使用
+      - name: 上传工具链
         uses: actions/upload-artifact@v4
         with:
           name: toolchain
@@ -42,16 +42,16 @@ jobs:
     needs: prepare
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout 源码
+      - name: 检出源码
         uses: actions/checkout@v4
 
-      - name: 安装系统编译基础包（轻量）
+      - name: 安装基础编译包
         run: |
           sudo apt update
           sudo apt install -y build-essential flex bison libncurses-dev \
                               libssl-dev bc device-tree-compiler gcc-9 g++-9
 
-      - name: 下载第一阶段缓存好的交叉编译器
+      - name: 下载交叉编译器
         uses: actions/download-artifact@v4
         with:
           name: toolchain
@@ -60,7 +60,25 @@ jobs:
       - name: 修复 DrvGen 权限
         run: sudo chmod -R 777 tools/dct
 
-      - name: 加载机型 defconfig
+      - name: 修复 DTC 多重定义 (yylloc)
+        run: |
+          # 强制 DTC 使用 -fcommon，根除重复定义
+          echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
+          # 顺便关掉可能将警告当成错误的 -Werror (如果有)
+          sed -i 's/-Werror//g' scripts/dtc/Makefile
+
+      - name: 下载缺失的 SELinux 头文件
+        run: |
+          mkdir -p security/selinux/include
+          for f in flask.h av_permissions.h classmap.h; do
+            if [ ! -f security/selinux/include/$f ]; then
+              curl -sL -o security/selinux/include/$f \
+                "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/$f"
+            fi
+          done
+          ls -l security/selinux/include/flask.h security/selinux/include/av_permissions.h security/selinux/include/classmap.h
+
+      - name: 加载 defconfig
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
@@ -72,31 +90,14 @@ jobs:
       - name: 开启 KALLSYMS_ALL
         run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
 
-      - name: 补充缺失的 SELinux 头文件（从 AOSP 4.9 镜像获取）
-        run: |
-          mkdir -p security/selinux/include
-          if [ ! -f security/selinux/include/flask.h ]; then
-            curl -sL -o security/selinux/include/flask.h \
-              https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/flask.h
-          fi
-          if [ ! -f security/selinux/include/av_permissions.h ]; then
-            curl -sL -o security/selinux/include/av_permissions.h \
-              https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/av_permissions.h
-          fi
-          if [ ! -f security/selinux/include/classmap.h ]; then
-            curl -sL -o security/selinux/include/classmap.h \
-              https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/classmap.h
-          fi
-          # 确认三个文件都已就位（用于日志检查，但不会中止任务）
-          ls -l security/selinux/include/flask.h security/selinux/include/av_permissions.h security/selinux/include/classmap.h
-
       - name: 编译内核
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
-          make -j$(nproc) Image.gz-dtb
+          # 再次通过命令行传递 -fcommon，双重保险
+          make -j$(nproc) Image.gz-dtb HOSTCFLAGS="-fcommon"
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
       - name: 上传成品内核
