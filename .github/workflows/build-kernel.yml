@@ -57,8 +57,13 @@ jobs:
       - name: 修复交叉编译器权限
         run: chmod -R +x gcc/bin
 
-      - name: 修复 DrvGen 权限
-        run: sudo chmod -R 777 tools/dct
+      - name: 将交叉编译器加入 PATH
+        run: echo "$(pwd)/gcc/bin" >> $GITHUB_PATH
+
+      - name: 修复 DrvGen 使用 Python 2
+        run: |
+          sed -i '1s|^#!/usr/bin/env python|#!/usr/bin/python2|' tools/dct/DrvGen.py
+          sudo chmod -R 777 tools/dct
 
       - name: 修复 DTC yylloc 多重定义
         run: |
@@ -79,7 +84,7 @@ jobs:
       - name: 加载 defconfig
         run: |
           export ARCH=arm64
-          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
+          export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
           make mrproper
@@ -88,15 +93,13 @@ jobs:
       - name: 开启 KALLSYMS_ALL 并禁用不支持的栈保护
         run: |
           sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
-          # GCC 4.9 不支持 -fstack-protector-strong，关闭该选项
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
-          # 确保 CONFIG_CC_STACKPROTECTOR_NONE 开启（部分内核需要）
           sed -i 's/# CONFIG_CC_STACKPROTECTOR_NONE is not set/CONFIG_CC_STACKPROTECTOR_NONE=y/' .config
-          
+
       - name: 编译内核
         run: |
           export ARCH=arm64
-          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
+          export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
           make -j$(nproc) Image.gz-dtb
@@ -109,4 +112,3 @@ jobs:
           path: |
             arch/arm64/boot/Image.gz-dtb
             vmlinuz
-            
