@@ -60,14 +60,19 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 强制 DrvGen.py 使用 python2
+      - name: 赋予 DrvGen 权限并修改 shebang
         run: |
           sudo chmod -R 777 tools/dct
           sed -i '1s|^#!/usr/bin/env python|#!/usr/bin/python2|' tools/dct/DrvGen.py
           sed -i '1s|^#!/usr/bin/python|#!/usr/bin/python2|' tools/dct/DrvGen.py
           head -1 tools/dct/DrvGen.py
 
-      - name: 修复 DTC 编译错误
+      - name: 将 drvgen.mk 中的调用改为 python2
+        run: |
+          # 只替换命令行中出现的 ./tools/dct/DrvGen.py，不触及目标名
+          sed -i '/\.\/tools\/dct\/DrvGen\.py/ s|\./tools/dct/DrvGen\.py|python2 ./tools/dct/DrvGen.py|g' scripts/drvgen/drvgen.mk
+
+      - name: 修复 DTC 及 extract-cert 编译错误
         run: |
           echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
           sed -i 's/-Werror//g' scripts/dtc/Makefile
@@ -105,7 +110,6 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
-          # 全局禁止将警告视为错误，并忽略废弃声明，解决 extract-cert 的问题
           export HOST_EXTRACFLAGS="-Wno-error -Wno-deprecated-declarations"
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
