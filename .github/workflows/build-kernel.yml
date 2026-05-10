@@ -65,12 +65,13 @@ jobs:
           sudo chmod -R 777 tools/dct
           sed -i '1s|^#!/usr/bin/env python|#!/usr/bin/python2|' tools/dct/DrvGen.py
           sed -i '1s|^#!/usr/bin/python|#!/usr/bin/python2|' tools/dct/DrvGen.py
-          head -1 tools/dct/DrvGen.py
 
-      - name: 将 drvgen.mk 中的调用改为 python2
+      - name: 将 Makefile 中的 DrvGen.py 调用改为 python2
         run: |
-          # 只替换命令行中出现的 ./tools/dct/DrvGen.py，不触及目标名
-          sed -i '/\.\/tools\/dct\/DrvGen\.py/ s|\./tools/dct/DrvGen\.py|python2 ./tools/dct/DrvGen.py|g' scripts/drvgen/drvgen.mk
+          # 修改顶层 Makefile 中的 for 循环调用
+          sed -i '/\.\/tools\/dct\/DrvGen\.py/ s|\./tools/dct/DrvGen\.py|python2 ./tools/dct/DrvGen.py|g' Makefile
+          # 修改 drvgen.mk 中可能存在的命令行调用
+          sed -i '/\.\/tools\/dct\/DrvGen\.py/ s|\./tools/dct/DrvGen\.py|python2 ./tools/dct/DrvGen.py|g' scripts/drvgen/drvgen.mk 2>/dev/null || true
 
       - name: 修复 DTC 及 extract-cert 编译错误
         run: |
