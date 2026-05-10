@@ -49,6 +49,12 @@ jobs:
           sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt install -y python2
 
+      - name: 强制系统默认 python 为 python2
+        run: |
+          sudo update-alternatives --install /usr/bin/python python /usr/bin/python2 100
+          sudo update-alternatives --set python /usr/bin/python2
+          python --version   # 应显示 Python 2.7.x
+
       - name: 下载交叉编译器
         uses: actions/download-artifact@v4
         with:
@@ -60,18 +66,8 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 赋予 DrvGen 权限并修改 shebang
-        run: |
-          sudo chmod -R 777 tools/dct
-          sed -i '1s|^#!/usr/bin/env python|#!/usr/bin/python2|' tools/dct/DrvGen.py
-          sed -i '1s|^#!/usr/bin/python|#!/usr/bin/python2|' tools/dct/DrvGen.py
-
-      - name: 将 Makefile 中的 DrvGen.py 调用改为 python2
-        run: |
-          # 修改顶层 Makefile 中的 for 循环调用
-          sed -i '/\.\/tools\/dct\/DrvGen\.py/ s|\./tools/dct/DrvGen\.py|python2 ./tools/dct/DrvGen.py|g' Makefile
-          # 修改 drvgen.mk 中可能存在的命令行调用
-          sed -i '/\.\/tools\/dct\/DrvGen\.py/ s|\./tools/dct/DrvGen\.py|python2 ./tools/dct/DrvGen.py|g' scripts/drvgen/drvgen.mk 2>/dev/null || true
+      - name: 赋予 DrvGen 权限
+        run: sudo chmod -R 777 tools/dct
 
       - name: 修复 DTC 及 extract-cert 编译错误
         run: |
