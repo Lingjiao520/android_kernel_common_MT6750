@@ -54,26 +54,28 @@ jobs:
           name: toolchain
           path: gcc
 
-      - name: 彻底修复交叉编译器（权限 + 符号链接）
+      - name: 修复交叉编译器
         run: |
           chmod -R +x gcc
-          # 将交叉编译器的可执行文件直接链接到 /usr/local/bin，确保内部 libexec 也能被找到
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 强硬修复 DrvGen.py 的 print 语法
+      - name: 修复 DrvGen.py（兼容 Python 3）
         run: |
-          # 直接替换 Python 3 不兼容的 print 语句
+          # 直接替换所有 Python 2 语法为 Python 3
+          # 1. 修复 print 语句
           sed -i "s/print '''/print('''/g" tools/dct/DrvGen.py
-          # 补上缺失的右括号（匹配多行字符串）
           sed -i "s/'''$/''')/g" tools/dct/DrvGen.py
-          # 如果还有三引号未处理，再补一刀
-          sed -i "s/'''\\s*$/''')/g" tools/dct/DrvGen.py
+          # 2. 修复 except 语句
+          sed -i 's/except \(.*\), \(.*\):/except \1 as \2:/g' tools/dct/DrvGen.py
           sudo chmod -R 777 tools/dct
 
-      - name: 修复 DTC yylloc 多重定义
+      - name: 修复 DTC 及 extract-cert 的编译错误
         run: |
           echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
           sed -i 's/-Werror//g' scripts/dtc/Makefile
+          # extract-cert 也需要关掉 -Werror（OpenSSL 3.0 废弃函数会报错）
+          sed -i 's/-Werror//g' scripts/Makefile.host 2>/dev/null || true
+          sed -i 's/-Werror//g' scripts/Makefile 2>/dev/null || true
 
       - name: 下载缺失的 SELinux 头文件
         run: |
