@@ -60,16 +60,14 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 强制 DrvGen.py 使用 python2（修改 shebang）
+      - name: 强制 DrvGen.py 使用 python2
         run: |
           sudo chmod -R 777 tools/dct
-          # 替换可能出现的两种 shebang
           sed -i '1s|^#!/usr/bin/env python|#!/usr/bin/python2|' tools/dct/DrvGen.py
           sed -i '1s|^#!/usr/bin/python|#!/usr/bin/python2|' tools/dct/DrvGen.py
-          echo "Shebang 已改为："
           head -1 tools/dct/DrvGen.py
 
-      - name: 修复 DTC 及 extract-cert 编译错误
+      - name: 修复 DTC 编译错误
         run: |
           echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
           sed -i 's/-Werror//g' scripts/dtc/Makefile
@@ -95,7 +93,7 @@ jobs:
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: 开启 KALLSYMS_ALL 并禁用栈保护
+      - name: 开启 KALLSYMS_ALL 并禁用不支持的栈保护
         run: |
           sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
@@ -107,6 +105,8 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
+          # 全局禁止将警告视为错误，并忽略废弃声明，解决 extract-cert 的问题
+          export HOST_EXTRACFLAGS="-Wno-error -Wno-deprecated-declarations"
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
