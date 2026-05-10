@@ -66,7 +66,7 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 赋予所有可执行脚本权限
+      - name: 赋予所有脚本权限
         run: |
           sudo chmod -R 777 tools/dct
           chmod +x scripts/dtc/dtc_overlay 2>/dev/null || true
@@ -106,10 +106,10 @@ jobs:
           sed -i 's/CONFIG_VDSO=y/# CONFIG_VDSO is not set/' .config
           make ARCH=arm64 olddefconfig
 
-      - name: 创建缺失的 vdso.lds（绕过依赖）
+      - name: 彻底屏蔽 VDSO 的构建目标
         run: |
-          mkdir -p arch/arm64/kernel/vdso
-          touch arch/arm64/kernel/vdso/vdso.lds
+          # 注释掉顶层 Makefile 中强制构建 vdso_prepare 的行
+          sed -i 's/^\(.*\)vdso_prepare\(.*\)$/#\1vdso_prepare\2 # disabled by CI/' arch/arm64/Makefile
 
       - name: 编译内核
         run: |
