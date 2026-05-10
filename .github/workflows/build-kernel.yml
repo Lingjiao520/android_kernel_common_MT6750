@@ -1,9 +1,9 @@
-name: Build MT6763 Kernel (2-Stage)
+name: Build MT6763 Kernel (Final)
 
 on: workflow_dispatch
 
 jobs:
-  # ==================== 第一阶段：准备环境 ====================
+  # 第一阶段：准备环境
   prepare:
     runs-on: ubuntu-22.04
     steps:
@@ -17,7 +17,7 @@ jobs:
           sudo apt install -y python2
           sudo ln -sf /usr/bin/python2 /usr/bin/python
 
-      - name: 获取 GCC 4.9 交叉编译器 (缓存)
+      - name: 获取交叉编译器（带缓存）
         uses: actions/cache@v4
         id: cache-gcc
         with:
@@ -26,7 +26,7 @@ jobs:
           restore-keys: |
             gcc49-${{ runner.os }}-
 
-      - name: 下载交叉编译器 (缓存未命中时)
+      - name: 下载交叉编译器（缓存缺失时）
         if: steps.cache-gcc.outputs.cache-hit != 'true'
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 gcc
@@ -37,7 +37,7 @@ jobs:
           name: toolchain
           path: gcc/
 
-  # ==================== 第二阶段：编译内核 ====================
+  # 第二阶段：编译内核
   build:
     needs: prepare
     runs-on: ubuntu-22.04
@@ -45,7 +45,7 @@ jobs:
       - name: 检出源码
         uses: actions/checkout@v4
 
-      - name: 安装基础编译包
+      - name: 安装编译基础包
         run: |
           sudo apt update
           sudo apt install -y build-essential flex bison libncurses-dev \
@@ -57,14 +57,15 @@ jobs:
           name: toolchain
           path: gcc
 
+      - name: 修复交叉编译器权限
+        run: chmod -R +x gcc/bin
+
       - name: 修复 DrvGen 权限
         run: sudo chmod -R 777 tools/dct
 
-      - name: 修复 DTC 多重定义 (yylloc)
+      - name: 修复 DTC yylloc 多重定义
         run: |
-          # 强制 DTC 使用 -fcommon，根除重复定义
           echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
-          # 顺便关掉可能将警告当成错误的 -Werror (如果有)
           sed -i 's/-Werror//g' scripts/dtc/Makefile
 
       - name: 下载缺失的 SELinux 头文件
@@ -76,12 +77,11 @@ jobs:
                 "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/$f"
             fi
           done
-          ls -l security/selinux/include/flask.h security/selinux/include/av_permissions.h security/selinux/include/classmap.h
+          ls -l security/selinux/include
 
-      - name: 加载 defconfig
+      - name: 加载 defconfig（纯主机工具）
         run: |
           export ARCH=arm64
-          export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
           make mrproper
@@ -90,14 +90,20 @@ jobs:
       - name: 开启 KALLSYMS_ALL
         run: sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
 
+      - name: 构建主机端工具（避免交叉编译器误用）
+        run: |
+          export ARCH=arm64
+          export HOSTCC=gcc-9
+          export HOSTCXX=g++-9
+          make -j$(nproc) scripts
+
       - name: 编译内核
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
-          # 再次通过命令行传递 -fcommon，双重保险
-          make -j$(nproc) Image.gz-dtb HOSTCFLAGS="-fcommon"
+          make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
       - name: 上传成品内核
