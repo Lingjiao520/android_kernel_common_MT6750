@@ -63,6 +63,11 @@ jobs:
           ls -la tools/dct/DrvGen.py
           sudo chmod -R 777 tools/dct
 
+      - name: 修正 drvgen.mk 强制使用 python2
+        run: |
+          # 把 drvgen.mk 中直接调用 DrvGen.py 的地方全部改为 python2 执行
+          sed -i 's|\./tools/dct/DrvGen.py|python2 ./tools/dct/DrvGen.py|g' scripts/drvgen/drvgen.mk
+
       - name: 修复 DTC 及 extract-cert 的编译错误
         run: |
           echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
@@ -101,7 +106,6 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
-          # 强制内核构建系统用 python2 执行 .py 脚本
           export PYTHON=python2
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
