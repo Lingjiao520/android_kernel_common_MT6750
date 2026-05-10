@@ -79,13 +79,112 @@ jobs:
           sed -i 's/-Werror//g' scripts/Makefile.host 2>/dev/null || true
           sed -i 's/-Werror//g' scripts/Makefile 2>/dev/null || true
 
-      - name: 下载缺失的 SELinux 头文件（从 android-4.9）
+      - name: 准备 SELinux 头文件（下载优先，失败时本地生成）
         run: |
           mkdir -p security/selinux/include
+
+          # 尝试从 android-4.4 下载（与内核 4.4 匹配），网络失败则用内置最小头文件
           for f in flask.h av_permissions.h classmap.h; do
             if [ ! -f security/selinux/include/$f ]; then
+              echo "尝试下载 $f ..."
               curl -f -sL -o security/selinux/include/$f \
-                "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/$f"
+                "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.4/security/selinux/include/$f" \
+                && echo "下载成功: $f" || {
+                  echo "下载 $f 失败，生成最小头文件"
+                  case $f in
+                    flask.h)
+                      cat > security/selinux/include/flask.h << 'EOF'
+#ifndef _FLASK_H_
+#define _FLASK_H_
+#define SECCLASS_SECURITY    1
+#define SECCLASS_PROCESS     2
+#define SECCLASS_FILE        3
+#define SECCLASS_DIR         4
+#define SECCLASS_FD          5
+#define SECCLASS_LNK_FILE    6
+#define SECCLASS_BLK_FILE    7
+#define SECCLASS_CHR_FILE    8
+#define SECCLASS_SOCK_FILE   9
+#define SECCLASS_FIFO_FILE   10
+#define SECCLASS_SOCKET      11
+#define SECCLASS_TCP_SOCKET  12
+#define SECCLASS_UDP_SOCKET  13
+#define SECCLASS_RAWIP_SOCKET 14
+#define SECCLASS_NETLINK_SOCKET 15
+#define SECCLASS_PACKET_SOCKET 16
+#define SECCLASS_KEY_SOCKET  17
+#define SECCLASS_UNIX_STREAM_SOCKET 18
+#define SECCLASS_UNIX_DGRAM_SOCKET 19
+#define SECCLASS_SCTP_SOCKET 20
+#define SECCLASS_ICMP_SOCKET 21
+#define SECCLASS_AX25_SOCKET 22
+#define SECCLASS_IPX_SOCKET  23
+#define SECCLASS_NETROM_SOCKET 24
+#define SECCLASS_ATMPVC_SOCKET 25
+#define SECCLASS_X25_SOCKET  26
+#define SECCLASS_ROSE_SOCKET 27
+#define SECCLASS_DECNET_SOCKET 28
+#define SECCLASS_APPLETALK_SOCKET 29
+#define SECCLASS_NETWORK     30
+#define SECCLASS_NODE        31
+#define SECCLASS_NETIF       32
+#define SECCLASS_BPF         33
+#define SECCLASS_CAPABILITY  34
+#define SECCLASS_CAPABILITY2 35
+#define SECCLASS_PEER        36
+#define SECCLASS_SYSTEM      37
+#define SECCLASS_IPC         38
+#define SECCLASS_SEM         39
+#define SECCLASS_MSGQ        40
+#define SECCLASS_SHM         41
+#define SECCLASS_TRANSITION  42
+#endif
+EOF
+                      ;;
+                    av_permissions.h)
+                      cat > security/selinux/include/av_permissions.h << 'EOF'
+#ifndef _AV_PERMISSIONS_H_
+#define _AV_PERMISSIONS_H_
+#define PROCESS__FORK           0x00000001UL
+#define PROCESS__SIGNAL         0x00000002UL
+#define PROCESS__PTRACE         0x00000004UL
+#define PROCESS__GETATTR        0x00000008UL
+#define PROCESS__SETATTR        0x00000010UL
+#define PROCESS__EXECMEM        0x00000020UL
+#define PROCESS__EXECHEAP       0x00000040UL
+#define PROCESS__EXECSTACK      0x00000080UL
+#define PROCESS__SETCURRENT     0x00000100UL
+#define PROCESS__DYNTRANSITION  0x00000200UL
+#define PROCESS__NOATSECURE     0x00000400UL
+#define PROCESS__SETKEYCREATE   0x00000800UL
+#define PROCESS__SETSOCKCREATE  0x00001000UL
+#define PROCESS__SETFSCREATE    0x00002000UL
+#define PROCESS__GETPGID        0x00004000UL
+#define PROCESS__GETSID         0x00008000UL
+#define PROCESS__GETCAP         0x00010000UL
+#define PROCESS__SETCAP         0x00020000UL
+#define PROCESS__SHARE          0x00040000UL
+#define PROCESS__GETSESSION     0x00080000UL
+#define PROCESS__SETSESSION     0x00100000UL
+#define PROCESS__GETRSEQ        0x00200000UL
+#define PROCESS__SETRSEQ        0x00400000UL
+#endif
+EOF
+                      ;;
+                    classmap.h)
+                      cat > security/selinux/include/classmap.h << 'EOF'
+#ifndef _CLASSMAP_H_
+#define _CLASSMAP_H_
+#define COMMON_FILE_SOCK_PERMS "ioctl", "read", "write", "create", \
+    "getattr", "setattr", "lock", "relabelfrom", "relabelto", "append"
+#define COMMON_SOCK_PERMS COMMON_FILE_SOCK_PERMS, "connect", "listen", \
+    "accept", "getopt", "setopt", "shutdown", "recvfrom", "sendto", \
+    "recv_msg", "send_msg", "name_bind", "name_connect"
+#endif
+EOF
+                      ;;
+                  esac
+                }
             fi
           done
 
