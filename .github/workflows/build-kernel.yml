@@ -9,11 +9,13 @@ jobs:
       - name: Checkout 源码
         uses: actions/checkout@v4
 
-      - name: 安装依赖
+      - name: 安装依赖（含旧版 GCC 为主机工具编译器）
         run: |
           sudo apt update
           sudo apt install -y build-essential flex bison libncurses-dev \
-                              libssl-dev bc device-tree-compiler
+                              libssl-dev bc device-tree-compiler \
+                              gcc-9 g++-9
+          # 安装 python2
           sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt install -y python2
           sudo ln -sf /usr/bin/python2 /usr/bin/python
@@ -24,15 +26,13 @@ jobs:
       - name: 修复 DrvGen 权限
         run: sudo chmod -R 777 tools/dct
 
-      - name: 修复 dtc 链接多重定义
-        run: |
-          echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
-          sed -i 's/-Werror//g' scripts/dtc/Makefile
-
       - name: 加载机型 defconfig
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
+          # 指定主机工具用 gcc-9
+          export HOSTCC=gcc-9
+          export HOSTCXX=g++-9
           make mrproper
           make k63v2_64_bsp_defconfig
 
@@ -43,9 +43,9 @@ jobs:
         run: |
           export ARCH=arm64
           export CROSS_COMPILE=$(pwd)/gcc/bin/aarch64-linux-android-
-          make -j$(nproc) Image.gz-dtb \
-            HOSTCFLAGS="-Wno-deprecated-declarations -fcommon" \
-            HOST_EXTRACFLAGS="-Wno-deprecated-declarations"
+          export HOSTCC=gcc-9
+          export HOSTCXX=g++-9
+          make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
       - name: 上传成品内核
