@@ -79,15 +79,13 @@ jobs:
           sed -i 's/-Werror//g' scripts/Makefile.host 2>/dev/null || true
           sed -i 's/-Werror//g' scripts/Makefile 2>/dev/null || true
 
-      - name: 下载缺失的 SELinux 头文件（android-4.4 分支）
+      - name: 下载 SELinux classmap.h（其余头文件由 genheaders 自动生成）
         run: |
           mkdir -p security/selinux/include
-          for f in flask.h av_permissions.h classmap.h; do
-            if [ ! -f security/selinux/include/$f ]; then
-              curl -f -sL -o security/selinux/include/$f \
-                "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.4/security/selinux/include/$f"
-            fi
-          done
+          if [ ! -f security/selinux/include/classmap.h ]; then
+            curl -f -sL -o security/selinux/include/classmap.h \
+              "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/security/selinux/include/classmap.h"
+          fi
 
       - name: 加载 defconfig
         run: |
