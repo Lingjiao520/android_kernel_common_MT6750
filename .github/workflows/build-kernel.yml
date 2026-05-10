@@ -14,8 +14,6 @@ jobs:
                               gcc-9 g++-9 libc6-dev-i386
           sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt install -y python2
-          # 不把 python 链接到 python2，保持 python 为 python3
-          # 这样只有我们明确调用 python2 的脚本才会用 python2
 
       - name: 获取交叉编译器（带缓存）
         uses: actions/cache@v4
@@ -60,13 +58,9 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 强制 DrvGen.py 用 Python 2 执行
+      - name: 确认 DrvGen.py 存在并赋予权限
         run: |
-          # 把 shebang 改成明确的 python2 路径
-          sed -i '1s|^#!.*|#!/usr/bin/python2|' tools/dct/DrvGen.py
-          # 把 drvgen.mk 里对 DrvGen.py 的调用也改成显式 python2
-          find scripts -name "drvgen.mk" -exec sed -i 's|\./tools/dct/DrvGen.py|python2 ./tools/dct/DrvGen.py|g' {} \;
-          find scripts -name "*.mk" -exec grep -l "DrvGen.py" {} \; | xargs -r sed -i 's|\./tools/dct/DrvGen.py|python2 ./tools/dct/DrvGen.py|g'
+          ls -la tools/dct/DrvGen.py
           sudo chmod -R 777 tools/dct
 
       - name: 修复 DTC 及 extract-cert 的编译错误
@@ -107,6 +101,8 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
+          # 强制内核构建系统用 python2 执行 .py 脚本
+          export PYTHON=python2
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
