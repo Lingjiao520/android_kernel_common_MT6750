@@ -15,7 +15,7 @@ jobs:
           sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt install -y python2
 
-      - name: 获取交叉编译器（带缓存）
+      - name: 获取交叉编译器（缓存）
         uses: actions/cache@v4
         id: cache-gcc
         with:
@@ -41,15 +41,13 @@ jobs:
       - name: 检出源码
         uses: actions/checkout@v4
 
-      - name: 安装编译基础包及 Python 2
+      - name: 安装编译依赖及 Python 2
         run: |
           sudo apt update
           sudo apt install -y build-essential flex bison libncurses-dev \
                               libssl-dev bc device-tree-compiler gcc-9 g++-9
           sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt install -y python2
-          # 确保 python2 可用
-          which python2
 
       - name: 下载交叉编译器
         uses: actions/download-artifact@v4
@@ -62,20 +60,16 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 确认 DrvGen.py 存在并赋予权限
+      - name: 强制 DrvGen.py 使用 python2（修改 shebang）
         run: |
-          ls -la tools/dct/DrvGen.py
           sudo chmod -R 777 tools/dct
+          # 替换可能出现的两种 shebang
+          sed -i '1s|^#!/usr/bin/env python|#!/usr/bin/python2|' tools/dct/DrvGen.py
+          sed -i '1s|^#!/usr/bin/python|#!/usr/bin/python2|' tools/dct/DrvGen.py
+          echo "Shebang 已改为："
+          head -1 tools/dct/DrvGen.py
 
-      - name: 将 DrvGen 调用改为 python2
-        run: |
-          # 查找所有 Makefile 中硬编码的 DrvGen.py 调用，统一改为 python2
-          grep -rl "DrvGen.py" scripts/ arch/ --include="*.mk" --include="Makefile" | while read f; do
-            sed -i 's|\./tools/dct/DrvGen.py|python2 ./tools/dct/DrvGen.py|g' "$f"
-            sed -i 's|DrvGen.py|python2 ./tools/dct/DrvGen.py|g' "$f"   # 以防有相对路径的其他写法
-          done
-
-      - name: 修复 DTC 及 extract-cert 的编译错误
+      - name: 修复 DTC 及 extract-cert 编译错误
         run: |
           echo 'HOST_EXTRACFLAGS += -fcommon' >> scripts/dtc/Makefile
           sed -i 's/-Werror//g' scripts/dtc/Makefile
@@ -101,7 +95,7 @@ jobs:
           make mrproper
           make k63v2_64_bsp_defconfig
 
-      - name: 开启 KALLSYMS_ALL 并兼容旧编译器
+      - name: 开启 KALLSYMS_ALL 并禁用栈保护
         run: |
           sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
@@ -113,7 +107,6 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-android-
           export HOSTCC=gcc-9
           export HOSTCXX=g++-9
-          export PYTHON=python2
           make -j$(nproc) Image.gz-dtb
           cp arch/arm64/boot/Image.gz-dtb vmlinuz
 
