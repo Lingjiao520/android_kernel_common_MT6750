@@ -66,11 +66,19 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 赋予所有脚本权限
+      - name: 赋予脚本权限
         run: |
           sudo chmod -R 777 tools/dct
           chmod +x scripts/dtc/dtc_overlay 2>/dev/null || true
           find scripts -name "*.sh" -exec chmod +x {} \;
+
+      - name: 下载缺失的内核源码文件 (entry.S 等)
+        run: |
+          # 如果 arch/arm64/kernel/entry.S 不存在，从 AOSP 4.9 镜像获取
+          if [ ! -f arch/arm64/kernel/entry.S ]; then
+            curl -sL -o arch/arm64/kernel/entry.S \
+              "https://raw.githubusercontent.com/aosp-mirror/kernel_common/android-4.9/arch/arm64/kernel/entry.S"
+          fi
 
       - name: 修复 DTC 及 extract-cert 编译错误
         run: |
@@ -100,15 +108,17 @@ jobs:
 
       - name: 调整内核配置 (KALLSYMS, 栈保护, VDSO, INITRAMFS)
         run: |
-          sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
-          sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
-          sed -i 's/# CONFIG_CC_STACKPROTECTOR_NONE is not set/CONFIG_CC_STACKPROTECTOR_NONE=y/' .config
-          sed -i 's/CONFIG_VDSO=y/# CONFIG_VDSO is not set/' .config
-          # 禁用 initramfs
-          sed -i 's/CONFIG_BLK_DEV_INITRD=y/# CONFIG_BLK_DEV_INITRD is not set/' .config
-          # 清空 INITRAMFS_SOURCE
-          sed -i '/CONFIG_INITRAMFS_SOURCE=/d' .config
-          echo '# CONFIG_INITRAMFS_SOURCE is not set' >> .config
+          # 开启全部符号
+          scripts/config --enable CONFIG_KALLSYMS_ALL
+          # 关闭不支持的栈保护
+          scripts/config --disable CONFIG_CC_STACKPROTECTOR_STRONG
+          scripts/config --enable CONFIG_CC_STACKPROTECTOR_NONE
+          # 禁用 VDSO
+          scripts/config --disable CONFIG_VDSO
+          # 彻底禁用 initramfs
+          scripts/config --disable CONFIG_BLK_DEV_INITRD
+          scripts/config --set-str CONFIG_INITRAMFS_SOURCE ""
+          # 更新依赖
           make ARCH=arm64 olddefconfig
 
       - name: 彻底屏蔽 VDSO 的构建目标
