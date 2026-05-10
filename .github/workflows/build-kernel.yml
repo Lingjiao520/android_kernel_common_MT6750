@@ -66,11 +66,10 @@ jobs:
           chmod -R +x gcc
           sudo ln -sf $(pwd)/gcc/bin/* /usr/local/bin/
 
-      - name: 赋予所有可执行脚本权限（DrvGen, dtc_overlay 等）
+      - name: 赋予所有可执行脚本权限
         run: |
           sudo chmod -R 777 tools/dct
           chmod +x scripts/dtc/dtc_overlay 2>/dev/null || true
-          # 防止其他缺失权限的脚本
           find scripts -name "*.sh" -exec chmod +x {} \;
 
       - name: 修复 DTC 及 extract-cert 编译错误
@@ -101,15 +100,16 @@ jobs:
 
       - name: 调整内核配置 (KALLSYMS, 栈保护, VDSO)
         run: |
-          # 开启所有符号
           sed -i 's/# CONFIG_KALLSYMS_ALL/CONFIG_KALLSYMS_ALL=y/' .config
-          # 关闭不支持的栈保护
           sed -i 's/CONFIG_CC_STACKPROTECTOR_STRONG=y/# CONFIG_CC_STACKPROTECTOR_STRONG is not set/' .config
           sed -i 's/# CONFIG_CC_STACKPROTECTOR_NONE is not set/CONFIG_CC_STACKPROTECTOR_NONE=y/' .config
-          # 禁用 VDSO（避免缺失 vdso.lds）
           sed -i 's/CONFIG_VDSO=y/# CONFIG_VDSO is not set/' .config
-          # 用 olddefconfig 更新依赖，彻底锁定配置
           make ARCH=arm64 olddefconfig
+
+      - name: 创建缺失的 vdso.lds（绕过依赖）
+        run: |
+          mkdir -p arch/arm64/kernel/vdso
+          touch arch/arm64/kernel/vdso/vdso.lds
 
       - name: 编译内核
         run: |
